@@ -1,0 +1,14 @@
+{
+  "name": "calendar-event-social-promo",
+  "version": "1.0.0",
+  "description": "Creates social media promotions for events on a Google calendar",
+  "author": "allenheltondev",
+  "license": "ISC",
+  "devDependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.600.0"
+  },
+  "dependencies": {
+    "@aws-lambda-powertools/parameters": "^2.2.0",
+    "googleapis": "^140.0.0"
+  }
+}
