@@ -5,10 +5,13 @@
   "author": "allenheltondev",
   "license": "ISC",
   "devDependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.600.0"
+    "@aws-sdk/client-bedrock-runtime": "^3.602.0",
+    "@aws-sdk/client-eventbridge": "^3.600.0",
+    "@aws-sdk/client-sfn": "^3.600.0"
   },
   "dependencies": {
     "@aws-lambda-powertools/parameters": "^2.2.0",
+    "@neondatabase/serverless": "^0.9.3",
     "googleapis": "^140.0.0"
   }
 }

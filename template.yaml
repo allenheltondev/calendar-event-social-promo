@@ -10,6 +10,12 @@ Parameters:
   GoogleApiKey:
     Type: String
     NoEcho: true
+  NeonConnectionString:
+    Type: String
+    NoEcho: true
+  HMACSecret:
+    Type: String
+    NoEcho: true
 
 Metadata:
   esbuild-properties: &esbuild-properties
@@ -40,6 +46,15 @@ Globals:
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
 
 Resources:
+  EventApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: v1
+      DefinitionBody:
+        'Fn::Transform':
+          Name: AWS::Include
+          Parameters:
+            Location: ./openapi.yaml
   CalendarTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -75,28 +90,24 @@ Resources:
         Fn::Sub:
           - |-
             {
-              "google": "${googleApiKey}"
+              "google": "${googleApiKey}",
+              "neon": "${neonConnectionString}"
             }
           - googleApiKey: !Ref GoogleApiKey
+            neonConnectionString: !Ref NeonConnectionString
 
-  CreateSocialPostsFunction:
+  CreateSocialPostPromptFunction:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
         <<: *esbuild-properties
         EntryPoints:
-          - create-social-posts.mjs
+          - create-social-post-prompt.mjs
     Properties:
-      Handler: create-social-posts.handler
-      Timeout: 45
+      Handler: create-social-post-prompt.handler
       Policies:
         - AWSLambdaBasicExecutionRole
-        - Version: 2012-10-17
-          Statement:
-            - Effect: Allow
-              Action: 'bedrock:InvokeModel'
-              Resource: '*'
 
   GetCalendarEventsFunction:
     Type: AWS::Serverless::Function
@@ -119,4 +130,252 @@ Resources:
         Variables:
           SECRET_ID: !Ref Secrets
 
+  FormatScheduleEventFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - format-schedule-event.mjs
+    Properties:
+      Handler: format-schedule-event.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Environment:
+        Variables:
+          ACCOUNT_ID: bis
 
+  AddSpeakerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - add-speaker.mjs
+    Properties:
+      Handler: add-speaker.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+
+  AddEventFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - add-event.mjs
+    Properties:
+      Handler: add-event.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+
+  IdentifyEventSpeakersFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - identify-event-speakers.mjs
+    Properties:
+      Handler: identify-event-speakers.handler
+      Timeout: 30
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: 'bedrock:InvokeModel'
+              Resource: '*'
+
+  RequestMissingSpeakerDataFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - request-missing-speaker-data.mjs
+    Properties:
+      Handler: request-missing-speaker-data.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+          EMAIL: allenheltondev@gmail.com
+          WEBSITE_URL: https://2p86bscitf.execute-api.us-east-1.amazonaws.com/v1
+          HMAC_SECRET: !Ref HMACSecret
+      Events:
+        MissingData:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - Create Calendar Event State Machine
+              detail-type:
+                - Request Missing Speaker Data
+
+  ResumeEventWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - resume-event-workflow.mjs
+    Properties:
+      Handler: resume-event-workflow.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+            - Effect: Allow
+              Action: states:SendTaskSuccess
+              Resource: '*'
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventApi
+            Path: /events/{eventId}/submit
+            Method: POST
+
+  UpdateSpeakerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - update-speaker.mjs
+    Properties:
+      Handler: update-speaker.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventApi
+            Path: /speakers/{speakerId}
+            Method: PUT
+
+  GetSpeakerFormFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - get-speaker-form.mjs
+    Properties:
+      Handler: get-speaker-form.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+          HMAC_SECRET: !Ref HMACSecret
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref EventApi
+            Path: /events/{eventId}
+            Method: GET
+
+  CreateSocialPostsFromCalendarStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: state-machines/create-social-posts-from-calendar.asl.json
+      DefinitionSubstitutions:
+        LambdaInvoke: !Sub arn:${AWS::Partition}:states:::lambda:invoke
+        GetCalendarEvents: !GetAtt GetCalendarEventsFunction.Arn
+        CreateSocialPostPrompt: !GetAtt CreateSocialPostPromptFunction.Arn
+        IdentifyEventSpeakers: !GetAtt IdentifyEventSpeakersFunction.Arn
+        AskOpenAI: "{{resolve:ssm:/readysetcloud/ask-openai}}"
+        FormatScheduleEvent: !GetAtt FormatScheduleEventFunction.Arn
+        AddEvent: !GetAtt AddEventFunction.Arn
+        DynamoDbGetItem: !Sub arn:${AWS::Partition}:states:::dynamodb:getItem
+        DynamoDbPutItem: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
+        TableName: !Ref CalendarTable
+        EventBridgePutEvents: !Sub arn:${AWS::Partition}:states:::events:putEvents
+        EventBridgePutEventsAndWait: !Sub arn:${AWS::Partition}:states:::events:putEvents.waitForTaskToken
+        Calendar: !Ref GoogleCalendarId
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt CalendarTable.Arn
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource:
+                - !GetAtt CreateSocialPostPromptFunction.Arn
+                - !GetAtt GetCalendarEventsFunction.Arn
+                - !GetAtt FormatScheduleEventFunction.Arn
+                - "{{resolve:ssm:/readysetcloud/ask-openai}}"
+                - !GetAtt IdentifyEventSpeakersFunction.Arn
+                - !GetAtt AddEventFunction.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+      Events:
+        Trigger:
+          Type: Schedule
+          Properties:
+            Schedule: "cron(0 3 ? * * *)"
+
+Outputs:
+  ApiBaseUrl:
+    Description: API Gateway endpoint for the account API
+    Value: !Sub 'https://${EventApi}.execute-api.${AWS::Region}.amazonaws.com/v1'

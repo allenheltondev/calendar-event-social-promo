@@ -31,7 +31,8 @@ export const handler = async (state) => {
         streamLink: e.location,
         registrationLink: e.htmlLink,
         description: e.description,
-        startDate: e.start,
+        startDate: new Date(e.start.dateTime).toISOString(),
+        endDate: new Date(e.end.dateTime).toISOString(),
         ...image && { image }
       };
     });

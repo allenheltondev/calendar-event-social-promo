@@ -1,0 +1,337 @@
+{
+  "Comment": "A description of my state machine",
+  "StartAt": "Get Calendar Events",
+  "States": {
+    "Get Calendar Events": {
+      "Type": "Task",
+      "Resource": "${LambdaInvoke}",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload": {
+          "calendarId": "${Calendar}"
+        },
+        "FunctionName": "${GetCalendarEvents}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Iterate Events"
+    },
+    "Iterate Events": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
+        "StartAt": "Get Existing Item",
+        "States": {
+          "Get Existing Item": {
+            "Type": "Task",
+            "Resource": "${DynamoDbGetItem}",
+            "Parameters": {
+              "TableName": "${TableName}",
+              "Key": {
+                "pk": {
+                  "S.$": "$.event.id"
+                },
+                "sk": {
+                  "S": "event"
+                }
+              }
+            },
+            "ResultPath": "$.existingEvent",
+            "Next": "What To Do With Event?"
+          },
+          "What To Do With Event?": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.existingEvent.Item",
+                "IsPresent": false,
+                "Next": "Identify Speakers"
+              },
+              {
+                "And": [
+                  {
+                    "Variable": "$.existingEvent.Item",
+                    "IsPresent": true
+                  },
+                  {
+                    "Not": {
+                      "Variable": "$.existingEvent.Item.date.S",
+                      "StringEqualsPath": "$.event.startDate.dateTime"
+                    }
+                  }
+                ],
+                "Next": "Delete Existing Social Campaign"
+              }
+            ],
+            "Default": "Skip Processing"
+          },
+          "Identify Speakers": {
+            "Type": "Task",
+            "Resource": "${LambdaInvoke}",
+            "Parameters": {
+              "FunctionName": "${IdentifyEventSpeakers}",
+              "Payload": {
+                "eventDescription.$": "$.event.description"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Save Event To Archive",
+            "ResultPath": "$.speakers",
+            "ResultSelector": {
+              "names.$": "$.Payload.speakers"
+            }
+          },
+          "Save Event To Archive": {
+            "Type": "Task",
+            "Resource": "${LambdaInvoke}",
+            "Parameters": {
+              "FunctionName": "${AddEvent}",
+              "Payload": {
+                "event.$": "$.event",
+                "speakers.$": "$.speakers.names"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Has Missing Speakers From Database?",
+            "ResultPath": "$.createdEvent",
+            "ResultSelector": {
+              "id.$": "$.Payload.eventId",
+              "missingSpeakers.$": "$.Payload.missingSpeakers",
+              "hasMissingSpeakers.$": "$.Payload.hasMissingSpeakers",
+              "speakers.$": "$.Payload.speakers"
+            }
+          },
+          "Has Missing Speakers From Database?": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.createdEvent.hasMissingSpeakers",
+                "BooleanEquals": true,
+                "Next": "Request Missing Speaker Data"
+              }
+            ],
+            "Default": "Get Social Post Prompt and Schema"
+          },
+          "Request Missing Speaker Data": {
+            "Type": "Task",
+            "Resource": "${EventBridgePutEventsAndWait}",
+            "Parameters": {
+              "Entries": [
+                {
+                  "Detail": {
+                    "eventId": "$.createdEvent.id",
+                    "missingSpeakers.$": "$.createdEvent.missingSpeakers",
+                    "token.$": "$$.Task.Token"
+                  },
+                  "DetailType": "Request Missing Speaker Data",
+                  "Source": "Create Calendar Event State Machine"
+                }
+              ]
+            },
+            "End": true
+          },
+          "Skip Processing": {
+            "Type": "Pass",
+            "End": true
+          },
+          "Get Social Post Prompt and Schema": {
+            "Type": "Task",
+            "Resource": "${LambdaInvoke}",
+            "Parameters": {
+              "FunctionName": "${CreateSocialPostPrompt}",
+              "Payload": {
+                "event.$": "$.event"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Build Social Posts",
+            "ResultPath": "$.ai",
+            "ResultSelector": {
+              "prompt.$": "$.Payload.prompt",
+              "schema.$": "$.Payload.schema"
+            }
+          },
+          "Build Social Posts": {
+            "Type": "Task",
+            "Resource": "${LambdaInvoke}",
+            "Parameters": {
+              "FunctionName": "${AskOpenAI}",
+              "Payload": {
+                "model": "gpt-4o",
+                "systemContext": "You are an expert social media marketer in the tech industry. You create social posts that have high engagement and registration conversions.",
+                "query.$": "$.ai.prompt",
+                "schema.$": "$.ai.schema"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "ResultPath": "$.social",
+            "ResultSelector": {
+              "posts.$": "$.Payload.response"
+            },
+            "Next": "Save and Schedule"
+          },
+          "Save and Schedule": {
+            "Type": "Parallel",
+            "Branches": [
+              {
+                "StartAt": "Save Calendar Event",
+                "States": {
+                  "Save Calendar Event": {
+                    "Type": "Task",
+                    "Resource": "${DynamoDbPutItem}",
+                    "Parameters": {
+                      "TableName": "${TableName}",
+                      "Item": {
+                        "pk": {
+                          "S.$": "$.event.id"
+                        },
+                        "sk": {
+                          "S": "event"
+                        },
+                        "date": {
+                          "S.$": "$.event.startDate.dateTime"
+                        }
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              {
+                "StartAt": "Format Scheduler Event",
+                "States": {
+                  "Format Scheduler Event": {
+                    "Type": "Task",
+                    "Resource": "${LambdaInvoke}",
+                    "OutputPath": "$.Payload",
+                    "Parameters": {
+                      "FunctionName": "${FormatScheduleEvent}",
+                      "Payload": {
+                        "posts.$": "$.social.posts"
+                      }
+                    },
+                    "Retry": [
+                      {
+                        "ErrorEquals": [
+                          "Lambda.ServiceException",
+                          "Lambda.AWSLambdaException",
+                          "Lambda.SdkClientException",
+                          "Lambda.TooManyRequestsException"
+                        ],
+                        "IntervalSeconds": 1,
+                        "MaxAttempts": 3,
+                        "BackoffRate": 2
+                      }
+                    ],
+                    "Next": "Schedule Social Posts"
+                  },
+                  "Schedule Social Posts": {
+                    "Type": "Task",
+                    "Resource": "${EventBridgePutEvents}",
+                    "Parameters": {
+                      "Entries": [
+                        {
+                          "Detail": {
+                            "messages.$": "$.messages"
+                          },
+                          "DetailType": "Schedule Social Post",
+                          "Source": "calendar.social-posts"
+                        }
+                      ]
+                    },
+                    "ResultPath": null,
+                    "End": true
+                  }
+                }
+              }
+            ],
+            "ResultPath": null,
+            "End": true
+          },
+          "Delete Existing Social Campaign": {
+            "Type": "Task",
+            "Resource": "${EventBridgePutEvents}",
+            "Parameters": {
+              "Entries": [
+                {
+                  "Detail": {
+                    "campaign.$": "$.event.id",
+                    "accountId": "bis"
+                  },
+                  "DetailType": "Delete Social Campaign",
+                  "Source": "calendar.social-posts"
+                }
+              ]
+            },
+            "ResultPath": null,
+            "Next": "Identify Speakers"
+          }
+        }
+      },
+      "End": true,
+      "ItemsPath": "$.events",
+      "MaxConcurrency": 3,
+      "ItemSelector": {
+        "event.$": "$$.Map.Item.Value"
+      }
+    }
+  }
+}
