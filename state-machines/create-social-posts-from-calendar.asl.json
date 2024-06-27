@@ -69,7 +69,7 @@
                   {
                     "Not": {
                       "Variable": "$.existingEvent.Item.date.S",
-                      "StringEqualsPath": "$.event.startDate.dateTime"
+                      "StringEqualsPath": "$.event.startDate"
                     }
                   }
                 ],
@@ -129,13 +129,41 @@
                 "BackoffRate": 2
               }
             ],
-            "Next": "Has Missing Speakers From Database?",
+            "Next": "Add Event to Discord",
             "ResultPath": "$.createdEvent",
             "ResultSelector": {
               "id.$": "$.Payload.eventId",
               "missingSpeakers.$": "$.Payload.missingSpeakers",
               "hasMissingSpeakers.$": "$.Payload.hasMissingSpeakers",
               "speakers.$": "$.Payload.speakers"
+            }
+          },
+          "Add Event to Discord": {
+            "Type": "Task",
+            "Resource": "${LambdaInvoke}",
+            "Parameters": {
+              "FunctionName": "${AddDiscordEvent}",
+              "Payload": {
+                "event.$": "$.event"
+              }
+            },
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
+                "IntervalSeconds": 1,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Has Missing Speakers From Database?",
+            "ResultPath": "$.discord",
+            "ResultSelector": {
+              "id.$": "$.Payload.id"
             }
           },
           "Has Missing Speakers From Database?": {
@@ -152,12 +180,14 @@
           "Request Missing Speaker Data": {
             "Type": "Task",
             "Resource": "${EventBridgePutEventsAndWait}",
+            "HeartbeatSeconds": 86400,
             "Parameters": {
               "Entries": [
                 {
                   "Detail": {
-                    "eventId": "$.createdEvent.id",
+                    "eventId": "$.createdEvent.eventId",
                     "missingSpeakers.$": "$.createdEvent.missingSpeakers",
+                    "contact.$": "$.event.contact",
                     "token.$": "$$.Task.Token"
                   },
                   "DetailType": "Request Missing Speaker Data",
@@ -165,7 +195,16 @@
                 }
               ]
             },
-            "End": true
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.HeartbeatTimeout"
+                ],
+                "Next": "Get Social Post Prompt and Schema",
+                "ResultPath": null
+              }
+            ],
+            "Next": "Get Social Post Prompt and Schema",
           },
           "Skip Processing": {
             "Type": "Pass",
@@ -177,7 +216,8 @@
             "Parameters": {
               "FunctionName": "${CreateSocialPostPrompt}",
               "Payload": {
-                "event.$": "$.event"
+                "event.$": "$.event",
+                "speakers.$": "$.createdEvent.speakers"
               }
             },
             "Retry": [
@@ -247,7 +287,13 @@
                           "S": "event"
                         },
                         "date": {
-                          "S.$": "$.event.startDate.dateTime"
+                          "S.$": "$.event.startDate"
+                        },
+                        "neonId": {
+                          "S.$": "$.createdEvent.eventId"
+                        },
+                        "discordId": {
+                          "S.$": "$.discord.id"
                         }
                       }
                     },

@@ -18,7 +18,12 @@ export const handler = async (event) => {
 
     const speakers = await Event.loadSpeakers(eventId);
     await sfn.send(new SendTaskSuccessCommand({
-      output: JSON.stringify({ speakers, event: eventData }),
+      output: JSON.stringify({
+        event: eventData,
+        createdEvent: {
+          speakers
+        }
+       }),
       taskToken: token
     }));
 

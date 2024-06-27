@@ -13,6 +13,12 @@ Parameters:
   NeonConnectionString:
     Type: String
     NoEcho: true
+  DiscordToken:
+    Type: String
+    NoEcho: true
+  GuildId:
+    Type: String
+    NoEcho: true
   HMACSecret:
     Type: String
     NoEcho: true
@@ -91,10 +97,12 @@ Resources:
           - |-
             {
               "google": "${googleApiKey}",
-              "neon": "${neonConnectionString}"
+              "neon": "${neonConnectionString}",
+              "discord": "${discordToken}"
             }
           - googleApiKey: !Ref GoogleApiKey
             neonConnectionString: !Ref NeonConnectionString
+            discordToken: !Ref DiscordToken
 
   CreateSocialPostPromptFunction:
     Type: AWS::Serverless::Function
@@ -129,6 +137,28 @@ Resources:
       Environment:
         Variables:
           SECRET_ID: !Ref Secrets
+
+  CreateDiscordEventFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - create-discord-event.mjs
+    Properties:
+      Handler: create-discord-event.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref Secrets
+      Environment:
+        Variables:
+          SECRET_ID: !Ref Secrets
+          GUILD_ID: !Ref GuildId
 
   FormatScheduleEventFunction:
     Type: AWS::Serverless::Function
@@ -230,7 +260,6 @@ Resources:
       Environment:
         Variables:
           SECRET_ID: !Ref Secrets
-          EMAIL: allenheltondev@gmail.com
           WEBSITE_URL: https://2p86bscitf.execute-api.us-east-1.amazonaws.com/v1
           HMAC_SECRET: !Ref HMACSecret
       Events:
@@ -340,6 +369,7 @@ Resources:
         GetCalendarEvents: !GetAtt GetCalendarEventsFunction.Arn
         CreateSocialPostPrompt: !GetAtt CreateSocialPostPromptFunction.Arn
         IdentifyEventSpeakers: !GetAtt IdentifyEventSpeakersFunction.Arn
+        AddDiscordEvent: !GetAtt CreateDiscordEventFunction.Arn
         AskOpenAI: "{{resolve:ssm:/readysetcloud/ask-openai}}"
         FormatScheduleEvent: !GetAtt FormatScheduleEventFunction.Arn
         AddEvent: !GetAtt AddEventFunction.Arn
@@ -366,6 +396,7 @@ Resources:
                 - "{{resolve:ssm:/readysetcloud/ask-openai}}"
                 - !GetAtt IdentifyEventSpeakersFunction.Arn
                 - !GetAtt AddEventFunction.Arn
+                - !GetAtt CreateDiscordEventFunction.Arn
             - Effect: Allow
               Action: events:PutEvents
               Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default

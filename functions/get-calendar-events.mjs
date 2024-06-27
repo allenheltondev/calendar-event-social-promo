@@ -27,6 +27,7 @@ export const handler = async (state) => {
 
       return {
         id: e.id,
+        contact: e.creator.email,
         title: e.summary,
         streamLink: e.location,
         registrationLink: e.htmlLink,

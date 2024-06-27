@@ -159,8 +159,8 @@ const getSpeakerFormHtml = (event, speakers, token) => `
           <input id="twitter-${speaker.id}" name="twitter-${speaker.id}" type="text" placeholder="Just the handle without the @" value="${speaker.twitter === 'null' ? '' : speaker.twitter}">
         </div>
         <div class="form-group">
-          <label for="discord-${speaker.id}">Discord username</label>
-          <input id="discord-${speaker.id}" name="discord-${speaker.id}" type="text" value="${speaker.discord === 'null' ? '' : speaker.discord}">
+          <label for="discord-${speaker.id}">Discord user id</label>
+          <input id="discord-${speaker.id}" name="discord-${speaker.id}" type="text" placeholder="Right click the user > Copy User iD" value="${speaker.discord === 'null' ? '' : speaker.discord}">
         </div>
         <div class="form-group">
           <button type="button" class="save-button" onclick="saveSpeaker('${speaker.id}')">Save</button>

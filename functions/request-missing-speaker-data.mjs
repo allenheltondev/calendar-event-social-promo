@@ -5,7 +5,7 @@ const events = new EventBridgeClient();
 
 export const handler = async (event) => {
   try {
-    const { eventId, missingSpeakers, token } = event.detail;
+    const { eventId, missingSpeakers, token, contact } = event.detail;
 
     const eventData = await Event.find(eventId);
     if (!eventData) {
@@ -18,7 +18,7 @@ export const handler = async (event) => {
       Entries: [
         {
           Detail: JSON.stringify({
-            to: process.env.EMAIL,
+            to: contact,
             subject: '[BIS] Missing Speaker Data',
             html
           }),

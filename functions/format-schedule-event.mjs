@@ -1,31 +1,31 @@
 export const handler = async (state) => {
-  const now = new Date();
-  const messages = [];
-  for (const tweet of state.posts.twitter) {
-    const date = new Date(tweet.sendAtDate);
-    if (date < now) continue;
-
-    messages.push({
-      scheduledDate: date.toISOString().split('.')[0],
-      platform: 'twitter',
-      accountId: process.env.ACCOUNT_ID,
-      message: tweet.message,
-      ...tweet.image && { image: tweet.image }
-    });
-  }
-
-  for (const linkedInPost of state.posts.linkedin) {
-    const date = new Date(linkedInPost.sendAtDate);
-    if (date < now) continue;
-
-    messages.push({
-      scheduledDate: date.toISOString().split('.')[0],
-      platform: 'linkedin',
-      accountId: process.env.ACCOUNT_ID,
-      message: linkedInPost.message,
-      ...linkedInPost.image && { image: linkedInPost.image }
-    });
-  }
-
+  const twitterMessages = formatPosts('twitter', state.posts.twitter);
+  const linkedInMessages = formatPosts('linkedin', state.posts.linkedin);
+  const discordMessages = formatPosts('discord', state.posts.discord);
+  const messages = [
+    ...twitterMessages,
+    ...linkedInMessages,
+    ...discordMessages
+  ];
   return { messages };
+};
+
+const formatPosts = (platform, messages) => {
+  const now = new Date();
+  const posts = [];
+
+  for (const message of messages) {
+    const date = new Date(message.sendAtDate);
+    if (date < now) continue;
+
+    posts.push({
+      scheduledDate: date.toISOString().split('.')[0],
+      platform,
+      accountId: process.env.ACCOUNT_ID,
+      message: message.message,
+      ...message.image && { image: message.image }
+    });
+  }
+
+  return posts;
 };
