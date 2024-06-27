@@ -237,6 +237,19 @@ Resources:
               Action: 'bedrock:InvokeModel'
               Resource: '*'
 
+  ReplaceSpeakerNamesWithTagsFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        <<: *esbuild-properties
+        EntryPoints:
+          - replace-speaker-names-with-tags.mjs
+    Properties:
+      Handler: replace-speaker-names-with-tags.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
   RequestMissingSpeakerDataFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -360,20 +373,49 @@ Resources:
             Path: /events/{eventId}
             Method: GET
 
-  CreateSocialPostsFromCalendarStateMachine:
+  SyncGoogleCalendarStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
       DefinitionUri: state-machines/create-social-posts-from-calendar.asl.json
       DefinitionSubstitutions:
         LambdaInvoke: !Sub arn:${AWS::Partition}:states:::lambda:invoke
         GetCalendarEvents: !GetAtt GetCalendarEventsFunction.Arn
+        Calendar: !Ref GoogleCalendarId
+        DynamoDbGetItem: !Sub arn:${AWS::Partition}:states:::dynamodb:getItem
+        TableName: !Ref CalendarTable
+        StepFunctionsStartExecution: !Sub arn:${AWS::Partition}:states:::states:startExecution
+        ProcessCalendarEvent: !GetAtt ProcessCalendarEventStateMachine.Arn
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt CalendarTable.Arn
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt GetCalendarEventsFunction.Arn
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !GetAtt ProcessCalendarEventStateMachine.Arn
+      Events:
+        Trigger:
+          Type: Schedule
+          Properties:
+            Schedule: "cron(0 3 ? * * *)"
+
+  ProcessCalendarEventStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: state-machines/process-calendar-event.asl.json
+      DefinitionSubstitutions:
+        LambdaInvoke: !Sub arn:${AWS::Partition}:states:::lambda:invoke
         CreateSocialPostPrompt: !GetAtt CreateSocialPostPromptFunction.Arn
         IdentifyEventSpeakers: !GetAtt IdentifyEventSpeakersFunction.Arn
         AddDiscordEvent: !GetAtt CreateDiscordEventFunction.Arn
+        ReplaceSpeakerNames: !GetAtt ReplaceSpeakerNamesWithTagsFunction.Arn
         AskOpenAI: "{{resolve:ssm:/readysetcloud/ask-openai}}"
         FormatScheduleEvent: !GetAtt FormatScheduleEventFunction.Arn
         AddEvent: !GetAtt AddEventFunction.Arn
-        DynamoDbGetItem: !Sub arn:${AWS::Partition}:states:::dynamodb:getItem
         DynamoDbPutItem: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
         TableName: !Ref CalendarTable
         EventBridgePutEvents: !Sub arn:${AWS::Partition}:states:::events:putEvents
@@ -383,28 +425,21 @@ Resources:
         - Version: 2012-10-17
           Statement:
             - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
+              Action: dynamodb:PutItem
               Resource: !GetAtt CalendarTable.Arn
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource:
                 - !GetAtt CreateSocialPostPromptFunction.Arn
-                - !GetAtt GetCalendarEventsFunction.Arn
                 - !GetAtt FormatScheduleEventFunction.Arn
                 - "{{resolve:ssm:/readysetcloud/ask-openai}}"
                 - !GetAtt IdentifyEventSpeakersFunction.Arn
                 - !GetAtt AddEventFunction.Arn
                 - !GetAtt CreateDiscordEventFunction.Arn
+                - !GetAtt ReplaceSpeakerNamesWithTagsFunction.Arn
             - Effect: Allow
               Action: events:PutEvents
               Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
-      Events:
-        Trigger:
-          Type: Schedule
-          Properties:
-            Schedule: "cron(0 3 ? * * *)"
 
 Outputs:
   ApiBaseUrl:

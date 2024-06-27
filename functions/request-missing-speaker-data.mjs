@@ -7,7 +7,7 @@ export const handler = async (event) => {
   try {
     const { eventId, missingSpeakers, token, contact } = event.detail;
 
-    const eventData = await Event.find(eventId);
+    const eventData = await Event.find(Number(eventId));
     if (!eventData) {
       console.warn(`Event with id ${eventId} not found`);
     }
@@ -42,7 +42,7 @@ below to fill out the missing information.
     ${missingSpeakers.map(speaker => `<li>${speaker.name}</li>`).join('')}
   </ul>
   <p>
-    <a href="${process.env.WEBSITE_URL}/events/${event.id}?token=${token}&key=${key}">Click here</a> to view missing information.
+    <a href="${process.env.WEBSITE_URL}/events/${event.id}?token=${urlSafeBase64Encode(token)}&key=${key}">Click here</a> to view missing information.
   </p>
   <p>
   Love,
@@ -51,3 +51,8 @@ below to fill out the missing information.
   </p>
 </div>
 `;
+
+function urlSafeBase64Encode(str) {
+  const encoded = Buffer.from(str).toString('base64');
+  return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}

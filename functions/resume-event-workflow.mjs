@@ -19,12 +19,16 @@ export const handler = async (event) => {
     const speakers = await Event.loadSpeakers(eventId);
     await sfn.send(new SendTaskSuccessCommand({
       output: JSON.stringify({
-        event: eventData,
+        event: {
+          id: `${eventData.id}`,
+          startDate: eventData.startdate
+        },
         createdEvent: {
+          id: `${eventData.id}`,
           speakers
         }
        }),
-      taskToken: token
+      taskToken: urlSafeBase64Decode(token)
     }));
 
     return { statusCode: 204 };
@@ -36,3 +40,11 @@ export const handler = async (event) => {
     };
   }
 };
+
+function urlSafeBase64Decode(str) {
+  let encoded = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (encoded.length % 4) {
+    encoded += '=';
+  }
+  return Buffer.from(encoded, 'base64').toString();
+}

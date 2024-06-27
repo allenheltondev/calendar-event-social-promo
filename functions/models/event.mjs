@@ -96,6 +96,9 @@ class Event {
         if (!speaker) {
           speaker = new Speaker(speakerName);
           speaker = await speaker.save();
+        }
+
+        if(!speaker.twitter || !speaker.discord){
           missingData.push({ id: speaker.id, name: speakerName });
         }
 

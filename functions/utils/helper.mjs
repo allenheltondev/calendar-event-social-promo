@@ -1,4 +1,8 @@
+import { Client, GatewayIntentBits } from 'discord.js';
+import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import crypto from 'crypto';
+
+let client;
 
 export const createHashKey = (data) => {
   const payload = JSON.stringify(data);
@@ -11,7 +15,16 @@ export const createHashKey = (data) => {
 export const verifyHashKey = (data, hashKey) => {
   const key = createHashKey(data);
 
-  console.log(key);
-  console.log(hashKey);
   return key === hashKey;
+};
+
+
+export const getDiscordClient = async () => {
+  if (!client) {
+    client = new Client({ intents: [GatewayIntentBits.GuildScheduledEvents, GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
+    const secrets = await getSecret(process.env.SECRET_ID, { transform: 'json' });
+    await client.login(secrets.discord);
+  }
+
+  return client;
 };

@@ -1,20 +1,12 @@
-import { Client, GatewayIntentBits, GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel } from 'discord.js';
-import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
-
-const client = new Client({ intents: [GatewayIntentBits.GuildScheduledEvents, GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] });
-let clientLoggedIn = false;
+import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel } from 'discord.js';
+import { getDiscordClient } from './utils/helper.mjs';
 
 export const handler = async (state) => {
   try {
-    if (!clientLoggedIn) {
-      const secrets = await getSecret(process.env.SECRET_ID, { transform: 'json' });
-      await client.login(secrets.discord);
-      clientLoggedIn = true;
-    }
-
+    const client = await getDiscordClient();
     const guild = await client.guilds.fetch(process.env.GUILD_ID);
     const events = await guild.scheduledEvents.fetch();
-    const existingEvent = events.find(e => e.name === state.title);
+    const existingEvent = events.find(e => e.name === state.event.title);
     if (existingEvent) {
       return { id: existingEvent.id };
     }
@@ -36,7 +28,5 @@ export const handler = async (state) => {
   } catch (err) {
     console.error(err);
     throw err;
-  } finally {
-    await client.destroy();
   }
 };

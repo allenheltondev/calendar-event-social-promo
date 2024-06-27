@@ -200,9 +200,8 @@ const getSpeakerFormHtml = (event, speakers, token) => `
         },
         body: JSON.stringify({ token: "${token}" })
       })
-      .then(response => response.json())
       .then(data => {
-        alert('All speakers submitted successfully');
+        alert('Got it, thanks!');
       })
       .catch((error) => {
         console.error('Error:', error);
