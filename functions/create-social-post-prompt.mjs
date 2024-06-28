@@ -10,7 +10,8 @@ export const handler = async (state) => {
       `positive vibe that promotes a sense of community. Build anticipation and encourage ` +
       `followers to attend as the event gets closer. All posts must include a link at the end of the message. ` +
       `The only posts that should include the streamLink is the 30 minutes before post and the start of the ` +
-      `event post. All others must include the registrationLink. Use the speaker's name and do not attempt to ` +
+      `event post. All others must include the registrationLink. Instead of saying to register for the event ` +
+      `say something like "mark your calendars". Use the speaker's name and do not attempt to ` +
       `tag them. Create the posts with relevant tone for all social platforms. Use the UTC startTime ` +
       `of the event to choose an appropriate sendAtDate for each post. If the event has an image, ` +
       `include it in the post object for the 5, 3, and 1 day out posts. Respond only with JSON. Event: ` +
