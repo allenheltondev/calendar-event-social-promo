@@ -274,7 +274,8 @@
               "Parameters": {
                 "FunctionName": "${FormatScheduleEvent}",
                 "Payload": {
-                  "posts.$": "$.social.posts"
+                  "posts.$": "$.social.posts",
+                  "eventId.$": "$.event.id"
                 }
               },
               "Retry": [

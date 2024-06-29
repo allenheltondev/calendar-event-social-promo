@@ -156,11 +156,11 @@ const getSpeakerFormHtml = (event, speakers, token) => `
         <legend>${speaker.name}</legend>
         <div class="form-group">
           <label for="twitter-${speaker.id}">Twitter username</label>
-          <input id="twitter-${speaker.id}" name="twitter-${speaker.id}" type="text" placeholder="Just the handle without the @" value="${speaker.twitter === 'null' ? '' : speaker.twitter}">
+          <input id="twitter-${speaker.id}" name="twitter-${speaker.id}" type="text" placeholder="Just the handle without the @" value="${getValue(speaker.twitter)}">
         </div>
         <div class="form-group">
           <label for="discord-${speaker.id}">Discord user id</label>
-          <input id="discord-${speaker.id}" name="discord-${speaker.id}" type="text" placeholder="Right click the user > Copy User iD" value="${speaker.discord === 'null' ? '' : speaker.discord}">
+          <input id="discord-${speaker.id}" name="discord-${speaker.id}" type="text" placeholder="Right click the user > Copy User iD" value="${getValue(speaker.discord)}">
         </div>
         <div class="form-group">
           <button type="button" class="save-button" onclick="saveSpeaker('${speaker.id}')">Save</button>
@@ -212,3 +212,8 @@ const getSpeakerFormHtml = (event, speakers, token) => `
 </body>
 </html>
 `;
+
+const getValue = (v) => {
+  if (!v || v == null || v == 'null') return '';
+  return v;
+};

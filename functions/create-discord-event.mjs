@@ -1,4 +1,5 @@
 import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel } from 'discord.js';
+import { convert } from 'html-to-text';
 import { getDiscordClient } from './utils/helper.mjs';
 
 export const handler = async (state) => {
@@ -17,7 +18,7 @@ export const handler = async (state) => {
       scheduledEndTime: state.event.endDate,
       privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
       entityType: GuildScheduledEventEntityType.External,
-      description: state.event.description,
+      description: convert(state.event.description),
       entityMetadata: {
         location: state.event.streamLink
       },
