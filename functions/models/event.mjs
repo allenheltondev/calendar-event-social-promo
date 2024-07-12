@@ -45,6 +45,32 @@ class Event {
     return event;
   }
 
+  /**
+   * 
+   * @param {*} title 
+   * @returns Event
+   */
+  static async findByTitle(title) {
+    const command = `
+            SELECT * FROM EVENT WHERE title ILIKE $1;
+        `;
+    const values = [title];
+    const result = await query(command, values);
+    const event = result[0];
+
+    if (event) {
+      this.id = event.id;
+      this.title = event.title;
+      this.description = event.description;
+      this.startDate = event.startDate;
+      this.endDate = event.endDate;
+      this.streamLink = event.streamLink;
+      this.image = event.image;
+    }
+
+    return event;
+  }
+
   static loadSpeakers(eventId) {
     const command = `
             SELECT s.* FROM SPEAKER s
