@@ -1,0 +1,208 @@
+{
+  "Comment": "Calendar sync controller",
+  "StartAt": "Fetch Events",
+  "States": {
+    "Fetch Events": {
+      "Type": "Parallel",
+      "Next": "Categorize Events",
+      "Branches": [
+        {
+          "StartAt": "Get Calendar Events",
+          "States": {
+            "Get Calendar Events": {
+              "Type": "Task",
+              "Resource": "${LambdaInvoke}",
+              "OutputPath": "$.Payload",
+              "Parameters": {
+                "Payload": {
+                  "calendarId": "${Calendar}"
+                },
+                "FunctionName": "${GetCalendarEvents}"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Get Existing Events",
+          "States": {
+            "Get Existing Events": {
+              "Type": "Task",
+              "Parameters": {
+                "TableName": "${TableName}",
+                "IndexName": "gsi1",
+                "KeyConditionExpression": "#pk = :pk AND #sk >= :sk",
+                "ExpressionAttributeNames": {
+                  "#pk": "type",
+                  "#sk": "sort"
+                },
+                "ExpressionAttributeValues": {
+                  ":pk": {
+                    "S": "event"
+                  },
+                  ":sk": {
+                    "S.$": "$$.Execution.StartTime"
+                  }
+                }
+              },
+              "Resource": "${DynamoDbQuery}",
+              "ResultPath": "$.ddbEvents",
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.fetch"
+    },
+    "Categorize Events": {
+      "Type": "Task",
+      "Resource": "${LambdaInvoke}",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload": {
+          "ddbEvents.$": "$.fetch[1].ddbEvents.Items",
+          "events.$": "$.fetch[0].events"
+        },
+        "FunctionName": "${CategorizeEvents}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Process Events"
+    },
+    "Process Events": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Process New Events",
+          "States": {
+            "Process New Events": {
+              "Type": "Map",
+              "ItemProcessor": {
+                "ProcessorConfig": {
+                  "Mode": "INLINE"
+                },
+                "StartAt": "Process New Event",
+                "States": {
+                  "Process New Event": {
+                    "Type": "Task",
+                    "Resource": "${StepFunctionsStartExecution}",
+                    "Parameters": {
+                      "StateMachineArn": "${ProcessCalendarEvent}",
+                      "Input": {
+                        "event.$": "$.event",
+                        "operation": "CREATE",
+                        "AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID.$": "$$.Execution.Id"
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              "ItemsPath": "$.newEvents",
+              "MaxConcurrency": 1,
+              "ItemSelector": {
+                "event.$": "$$.Map.Item.Value"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Process Updated Events",
+          "States": {
+            "Process Updated Events": {
+              "Type": "Map",
+              "ItemProcessor": {
+                "ProcessorConfig": {
+                  "Mode": "INLINE"
+                },
+                "StartAt": "Process Updated Event",
+                "States": {
+                  "Process Updated Event": {
+                    "Type": "Task",
+                    "Resource": "${StepFunctionsStartExecution}",
+                    "Parameters": {
+                      "StateMachineArn": "${ProcessCalendarEvent}",
+                      "Input": {
+                        "event.$": "$.event",
+                        "operation": "REPLACE",
+                        "AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID.$": "$$.Execution.Id"
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              "ItemsPath": "$.updatedEvents",
+              "MaxConcurrency": 1,
+              "ItemSelector": {
+                "event.$": "$$.Map.Item.Value"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Process Deleted Events",
+          "States": {
+            "Process Deleted Events": {
+              "Type": "Map",
+              "ItemProcessor": {
+                "ProcessorConfig": {
+                  "Mode": "INLINE"
+                },
+                "StartAt": "Process Deleted Event",
+                "States": {
+                  "Process Deleted Event": {
+                    "Type": "Task",
+                    "Resource": "${StepFunctionsStartExecution}",
+                    "Parameters": {
+                      "StateMachineArn": "${ProcessCalendarEvent}",
+                      "Input": {
+                        "event.$": "$.event",
+                        "operation": "DELETE",
+                        "AWS_STEP_FUNCTIONS_STARTED_BY_EXECUTION_ID.$": "$$.Execution.Id"
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              "End": true,
+              "ItemsPath": "$.deletedEvents",
+              "MaxConcurrency": 1,
+              "ItemSelector": {
+                "event.$": "$$.Map.Item.Value"
+              }
+            }
+          }
+        }
+      ],
+      "End": true
+    }
+  }
+}

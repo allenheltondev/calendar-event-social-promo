@@ -14,9 +14,118 @@
           "Variable": "$.operation",
           "StringEquals": "REPLACE",
           "Next": "Delete Existing Social Campaign"
+        },
+        {
+          "Variable": "$.operation",
+          "StringEquals": "DELETE",
+          "Next": "Delete From DynamoDB"
         }
       ],
       "Default": "Invalid Operation"
+    },
+    "Delete From DynamoDB": {
+      "Type": "Task",
+      "Resource": "${DynamoDbDeleteItem}",
+      "Parameters": {
+        "TableName": "${TableName}",
+        "Key": {
+          "pk": {
+            "S.$": "$.event.id"
+          },
+          "sk": {
+            "S": "event"
+          }
+        },
+        "ReturnValues": "ALL_OLD"
+      },
+      "ResultPath": "$.db",
+      "Next": "Delete In Other Places"
+    },
+    "Delete In Other Places": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Delete From Discord",
+          "States": {
+            "Delete From Discord": {
+              "Type": "Task",
+              "Resource": "${LambdaInvoke}",
+              "Parameters": {
+                "FunctionName": "${DeleteDiscordEvent}",
+                "Payload": {
+                  "discordId.$": "$.db.Attributes.discordId.S"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "States.ALL"
+                  ],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 5,
+                  "BackoffRate": 5
+                }
+              ],
+              "ResultPath": null,
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Delete From Neon",
+          "States": {
+            "Delete From Neon": {
+              "Type": "Task",
+              "Resource": "${LambdaInvoke}",
+              "Parameters": {
+                "FunctionName": "${DeleteEvent}",
+                "Payload": {
+                  "neonId.$": "$.db.Attributes.neonId.S"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 1,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "End": true,
+              "ResultPath": null
+            }
+          }
+        },
+        {
+          "StartAt": "Delete Scheduled Social Posts",
+          "States": {
+            "Delete Scheduled Social Posts": {
+              "Type": "Task",
+              "Resource": "${EventBridgePutEvents}",
+              "Parameters": {
+                "Entries": [
+                  {
+                    "Detail": {
+                      "campaign.$": "$.event.id",
+                      "accountId": "bis"
+                    },
+                    "DetailType": "Delete Social Campaign",
+                    "Source": "calendar.social-posts"
+                  }
+                ]
+              },
+              "ResultPath": null,
+              "End": true
+            }
+          }
+        }
+      ],
+      "End": true
     },
     "Identify Speakers": {
       "Type": "Task",
@@ -123,7 +232,9 @@
           },
           "discordId": {
             "S.$": "$.discord.id"
-          }
+          },
+          "type": { "S": "event" },
+          "sort": { "S.$": "$$.Execution.Input.event.startDate"}
         }
       },
       "Next": "Has Missing Speakers From Database?",

@@ -46,8 +46,8 @@ class Event {
   }
 
   /**
-   * 
-   * @param {*} title 
+   *
+   * @param {*} title
    * @returns Event
    */
   static async findByTitle(title) {
@@ -124,7 +124,7 @@ class Event {
           speaker = await speaker.save();
         }
 
-        if(!speaker.twitter || !speaker.discord){
+        if (!speaker.twitter || !speaker.discord) {
           missingData.push({ id: speaker.id, name: speakerName });
         }
 
@@ -143,28 +143,17 @@ class Event {
     }
   }
 
-  async delete() {
-    if (!this.id) throw new Error('Event not loaded.');
-
-    const command = `
+  static async delete(id) {
+    const eventData = await this.find(id);
+    if (eventData) {
+      const command = `
             DELETE FROM EVENT WHERE id = $1
             RETURNING *;
         `;
-    const values = [this.id];
-    const result = await query(command, values);
-    const deletedEvent = result[0];
-
-    if (deletedEvent) {
-      this.id = null;
-      this.title = null;
-      this.description = null;
-      this.startDate = null;
-      this.endDate = null;
-      this.streamLink = null;
-      this.image = null;
+      const values = [this.id];
+      await query(command, values);
     }
 
-    return deletedEvent;
   }
 }
 
