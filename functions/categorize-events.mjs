@@ -5,14 +5,19 @@ export const handler = async (state) => {
     const newEvents = state.events.filter(e => !ddbEvents.find(ddb => ddb.pk === e.id));
     const deletedEvents = ddbEvents.filter(e => !state.events.find(event => event.id === e.pk)).map(e => {
       return {
-        id: e.pk
-      }
+        id: e.pk,
+        campaign: e.neonId
+      };
     });
-    const updatedEvents = state.events.filter(e => {
+    let updatedEvents = [];
+    for (const event of state.events) {
       const ddb = ddbEvents.find(ddb => ddb.pk === e.id);
-      if (!ddb) return false;
-      return ddb.date !== e.startDate;
-    });
+      if (!ddb) continue;
+
+      if (ddb.date !== e.startDate) {
+        updatedEvents.push({ ...event, campaign: e.neonId });
+      }
+    }
 
     return {
       newEvents,

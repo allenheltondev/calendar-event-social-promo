@@ -111,7 +111,7 @@
                 "Entries": [
                   {
                     "Detail": {
-                      "campaign.$": "$.event.id",
+                      "campaign.$": "$$.Execution.Input.event.campaign",
                       "accountId": "bis"
                     },
                     "DetailType": "Delete Social Campaign",
@@ -418,7 +418,7 @@
         "Entries": [
           {
             "Detail": {
-              "campaign.$": "$.event.id",
+              "campaign.$": "$.event.campaign",
               "accountId": "bis"
             },
             "DetailType": "Delete Social Campaign",
