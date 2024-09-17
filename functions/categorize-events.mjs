@@ -11,11 +11,11 @@ export const handler = async (state) => {
     });
     let updatedEvents = [];
     for (const event of state.events) {
-      const ddb = ddbEvents.find(ddb => ddb.pk === e.id);
+      const ddb = ddbEvents.find(ddb => ddb.pk === event.id);
       if (!ddb) continue;
 
-      if (ddb.date !== e.startDate) {
-        updatedEvents.push({ ...event, campaign: e.neonId });
+      if (ddb.date !== event.startDate) {
+        updatedEvents.push({ ...event, campaign: event.neonId });
       }
     }
 
