@@ -1,7 +1,10 @@
 import { SFNClient, SendTaskSuccessCommand } from '@aws-sdk/client-sfn';
+import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import Event from "./models/event.mjs";
 
 const sfn = new SFNClient();
+const ddb = new DynamoDBClient();
 
 export const handler = async (event) => {
   try {
@@ -17,6 +20,7 @@ export const handler = async (event) => {
     }
 
     const speakers = await Event.loadSpeakers(eventId);
+    const discordId = await getDiscordId(eventId);
     await sfn.send(new SendTaskSuccessCommand({
       output: JSON.stringify({
         event: {
@@ -26,8 +30,9 @@ export const handler = async (event) => {
         createdEvent: {
           id: `${eventData.id}`,
           speakers
-        }
-       }),
+        },
+        ...discordId && { discord: { id: discordId } }
+      }),
       taskToken: urlSafeBase64Decode(token)
     }));
 
@@ -48,3 +53,13 @@ function urlSafeBase64Decode(str) {
   }
   return Buffer.from(encoded, 'base64').toString();
 }
+
+const getDiscordId = async (id) => {
+  const result = await ddb.send(new GetItemCommand({
+    TableName: process.env.TABLE_NAME,
+    Key: marshall({ pk: id, sk: 'event' })
+  }));
+  if (result.Item) {
+    return unmarshall(result.Item).discordId;
+  }
+};

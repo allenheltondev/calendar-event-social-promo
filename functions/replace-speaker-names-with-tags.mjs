@@ -1,7 +1,7 @@
 export const handler = async (state) => {
   return {
     twitter: processTwitterMessages(state.speakers, state.messages.twitter),
-    discord: processDiscordMessages(state.speakers, state.messages.discord),
+    discord: processDiscordMessages(state.speakers, state.messages.discord, state.discordEventId, state.registrationLink),
     linkedin: processLinkedInMessages(state.speakers, state.messages.linkedin)
   };
 };
@@ -28,7 +28,7 @@ const processTwitterMessages = (speakers, twitter) => {
   return messages;
 };
 
-const processDiscordMessages = (speakers, discord) => {
+const processDiscordMessages = (speakers, discord, eventId, registrationLink) => {
   const messages = [];
 
   for (const message of discord) {
@@ -39,6 +39,9 @@ const processDiscordMessages = (speakers, discord) => {
         msg = msg.replace(regex, `<@${speaker.discord}>`);
       }
     }
+
+    // Replace the calendar event link with a link to the native discord event for better preview cards
+    msg = msg.replace(registrationLink, `https://discord.com/events/${process.env.GUILD_ID}/${eventId}`);
 
     messages.push({
       message: msg,

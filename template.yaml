@@ -310,6 +310,9 @@ Resources:
       Handler: replace-speaker-names-with-tags.handler
       Policies:
         - AWSLambdaBasicExecutionRole
+      Environment:
+        Variables:
+          GUILD_ID: !Ref GuildId
 
   RequestMissingSpeakerDataFunction:
     Type: AWS::Serverless::Function
@@ -366,9 +369,13 @@ Resources:
             - Effect: Allow
               Action: states:SendTaskSuccess
               Resource: '*'
+            - Effect: Allow
+              Action: dynamodb:GetItem
+              Resource: !GetAtt CalendarTable.Arn
       Environment:
         Variables:
           SECRET_ID: !Ref Secrets
+          TABLE_NAME: !Ref CalendarTable
       Events:
         ApiEvent:
           Type: HttpApi

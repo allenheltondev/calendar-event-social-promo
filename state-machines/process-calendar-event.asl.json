@@ -349,7 +349,9 @@
         "FunctionName": "${ReplaceSpeakerNames}",
         "Payload": {
           "speakers.$": "$.createdEvent.speakers",
-          "messages.$": "$.social.posts"
+          "messages.$": "$.social.posts",
+          "discordEventId.$": "$.discord.id",
+          "registrationLink.$": "$$.Execution.Input.event.registrationLink"
         }
       },
       "Retry": [
